@@ -5,6 +5,26 @@ All notable changes to the GeoIdenti SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-04-18
+
+### Added
+- `search_vector()` — POST /v1/search/vector: hybrid face+metadata search using a raw 128-dimensional face embedding
+- `update_metadata()` — PATCH /v1/metadata: update identity name, relationship, and optional metadata for a vector (admin)
+- `propagate_label()` — PATCH /v1/label/propagate: spread metadata to similar vectors by source vector ID (admin)
+- `propagate_from_image()` — POST /v1/analyze/propagate: spread metadata to similar vectors by source image (admin)
+- `analyze()` now accepts optional `identity_name`, `relationship`, `optional_search_field_1`, `city`, `country` parameters
+- `analyze()` response documents `inferred_identity` (bool) field returned by the engine
+- `search()` now accepts optional `relationship`, `optional_search_field_1`, `country`, `semantic_query`, `face_weight` parameters
+- `search()` response documents `region`, `display_name`, `latitude`, `longitude` fields returned by the engine
+- Admin role requirement documented for `label_identity`, `update_metadata`, `propagate_label`, `propagate_from_image`
+
+### Fixed
+- `test_label_identity_success`: corrected expected status from `"labeled"` to `"updated"` to match engine response
+- `None`-valued optional parameters are now omitted from request payloads and query strings (not sent as `null`)
+
+### Breaking Changes
+- None
+
 ## [1.0.0] - 2026-04-09
 
 ### Added

@@ -35,7 +35,7 @@ Runs a complete biometric identity pipeline across 6 sample URLs from `integrati
 ## Prerequisites
 
 - Python 3.9+
-- GeoIdenti engine running (Docker Compose — see below)
+- A running GeoIdenti engine instance accessible at a known URL
 - `geoidenti-sdk` installed:
   ```bash
   pip install geoidenti-sdk
@@ -43,41 +43,13 @@ Runs a complete biometric identity pipeline across 6 sample URLs from `integrati
   pip install -e /path/to/geoidenti-sdk
   ```
 
-### Start the Engine (Docker Compose)
-
-```bash
-# From the engine repository root
-docker compose up -d
-
-# Confirm services are healthy
-docker compose ps
-
-# Wait for the API to be ready
-sleep 10
-
-# Verify
-curl http://localhost:8000/health
-```
-
 ---
 
 ## Auth Setup
 
 `demo.py` requires an **analyst-level** JWT. `integration/image_url_demo.py` requires an **admin-level** JWT (the label and propagate endpoints enforce admin role).
 
-### Generate a token via the engine
-
-```bash
-# From the engine repository root
-DEBUG=true SECRET_KEY=development-secret-key-change-in-production JWT_ALGORITHM=HS256 \
-  .venv/bin/python3.11 - <<'PY'
-from src.auth import TokenManager
-# Analyst token (demo.py)
-print("ANALYST:", TokenManager.create_token({'sub': 'demo-user', 'role': 'analyst'}))
-# Admin token (image_url_demo.py)
-print("ADMIN:  ", TokenManager.create_token({'sub': 'demo-admin', 'role': 'admin'}))
-PY
-```
+Obtain your JWT from your GeoIdenti administrator. Set it as an environment variable before running either script.
 
 ### Configure environment variables
 
@@ -195,8 +167,8 @@ Submitting 6 URL(s) to POST /v1/analyze...
 | Symptom | Fix |
 |---|---|
 | `EnvironmentError: GEOIDENTI_API_KEY is not set` | `export GEOIDENTI_API_KEY="<token>"` |
-| `401 Unauthorized` | Token expired or wrong role — regenerate (analyst for demo.py, admin for image_url_demo.py) |
-| `ConnectionRefusedError` / `Connection refused` | Start the engine: `docker compose up -d` then `sleep 10` |
+| `401 Unauthorized` | Token expired or wrong role — obtain a fresh token from your GeoIdenti administrator (analyst for demo.py, admin for image_url_demo.py) |
+| `ConnectionRefusedError` / `Connection refused` | Verify the engine is running and `GEOIDENTI_BASE_URL` points to the correct host and port |
 | `analyze()` returns no `vector_id` / empty string | Image URL must be publicly reachable — test with `curl -I <url>` |
 | `propagate updated_count = 0` for all identities | At least one analyze pass with that identity must have run first; check Pass 1 completed successfully |
 | `search()` returns empty list after label | Allow 1–2 seconds for the engine to index the labeled vector, then rerun |
@@ -327,8 +299,4 @@ curl -s -X PATCH "$BASE/v1/metadata" \
        "relationship": "colleague"}'
 ```
 
----
 
-## Note on `verification_ui.py`
-
-The engine's integration includes a `verification_ui.py` browser-based search form. This component is not included in the SDK demo because it requires direct Qdrant client access — which is an internal engine service not available to SDK consumers. All search and filter functionality available through the public API is covered by `client.search()` and `client.search_vector()` in the scripts above.

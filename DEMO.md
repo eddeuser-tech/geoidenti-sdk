@@ -1,7 +1,6 @@
 # GeoIdenti SDK Demo Guide
 
-This guide explains how to run the two GeoIdenti SDK demo scripts against a live engine instance.
-Both scripts use only the public `GeoIdenti` SDK client — no internal engine imports, no direct Qdrant access.
+This guide explains how to run the two GeoIdenti SDK demo scripts against the GeoIdenti Engine.
 
 ## Purpose
 

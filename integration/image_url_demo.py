@@ -62,8 +62,8 @@ class ImageUrlDemo:
                 "\n❌  GEOIDENTI_API_KEY is not set.\n"
                 "\n"
                 "   Export your admin JWT before running:\n"
-                "     export GEOIDENTI_API_KEY=\"<your-admin-jwt>\"\n"
-                "     export GEOIDENTI_BASE_URL=\"http://localhost:8000/v1\"  # if not using production\n"
+                '     export GEOIDENTI_API_KEY="<your-admin-jwt>"\n'
+                '     export GEOIDENTI_BASE_URL="http://localhost:8000/v1"  # if not using production\n'
             )
             sys.exit(1)
 
@@ -76,7 +76,9 @@ class ImageUrlDemo:
             sys.exit(1)
         with open(SIDECAR_PATH, "r", encoding="utf-8") as fh:
             data = json.load(fh)
-        print(f"📋 Loaded {len(data)} entr{'y' if len(data) == 1 else 'ies'} from sample_images.json")
+        print(
+            f"📋 Loaded {len(data)} entr{'y' if len(data) == 1 else 'ies'} from sample_images.json"
+        )
         return data
 
     def print_header(self, title: str):
@@ -96,7 +98,9 @@ class ImageUrlDemo:
             url = entry["image_url"]
             identity_name: Optional[str] = entry.get("identity_name")
             relationship: Optional[str] = entry.get("relationship")
-            optional_search_field_1: Optional[str] = entry.get("optional_search_field_1")
+            optional_search_field_1: Optional[str] = entry.get(
+                "optional_search_field_1"
+            )
 
             print(f"🔍 [{i}/{len(self.sample_images)}] {url}")
             try:
@@ -118,34 +122,40 @@ class ImageUrlDemo:
                 print(f"   📍 country:          {country}")
                 print(f"   🔍 inferred_identity: {inferred}")
 
-                self.results.append({
-                    "image_url": url,
-                    "identity_name": identity_name,
-                    "relationship": relationship,
-                    "optional_search_field_1": optional_search_field_1,
-                    "vector_id": vector_id,
-                    "face_vector": face_vector,
-                    "city": city,
-                    "country": country,
-                    "inferred_identity": inferred,
-                })
+                self.results.append(
+                    {
+                        "image_url": url,
+                        "identity_name": identity_name,
+                        "relationship": relationship,
+                        "optional_search_field_1": optional_search_field_1,
+                        "vector_id": vector_id,
+                        "face_vector": face_vector,
+                        "city": city,
+                        "country": country,
+                        "inferred_identity": inferred,
+                    }
+                )
             except Exception as exc:
                 print(f"   ❌ Analyze failed: {exc}")
-                self.results.append({
-                    "image_url": url,
-                    "identity_name": identity_name,
-                    "relationship": relationship,
-                    "optional_search_field_1": optional_search_field_1,
-                    "vector_id": None,
-                    "face_vector": None,
-                    "city": "n/a",
-                    "country": "n/a",
-                    "inferred_identity": False,
-                    "error": str(exc),
-                })
+                self.results.append(
+                    {
+                        "image_url": url,
+                        "identity_name": identity_name,
+                        "relationship": relationship,
+                        "optional_search_field_1": optional_search_field_1,
+                        "vector_id": None,
+                        "face_vector": None,
+                        "city": "n/a",
+                        "country": "n/a",
+                        "inferred_identity": False,
+                        "error": str(exc),
+                    }
+                )
 
         stored = sum(1 for r in self.results if r.get("vector_id"))
-        print(f"\n📊 Analyze complete — {stored}/{len(self.sample_images)} vector(s) stored.")
+        print(
+            f"\n📊 Analyze complete — {stored}/{len(self.sample_images)} vector(s) stored."
+        )
 
     # ------------------------------------------------------------------
     # Pass 2 — Label
@@ -153,10 +163,14 @@ class ImageUrlDemo:
 
     def run_label_pass(self):
         self.print_header("Pass 2 — Label Identities")
-        labeled = [r for r in self.results if r.get("identity_name") and r.get("vector_id")]
+        labeled = [
+            r for r in self.results if r.get("identity_name") and r.get("vector_id")
+        ]
 
         if not labeled:
-            print("⚠️  No sidecar-labeled entries with a stored vector_id — skipping label pass.")
+            print(
+                "⚠️  No sidecar-labeled entries with a stored vector_id — skipping label pass."
+            )
             return
 
         print(f"Applying explicit labels for {len(labeled)} vector(s)...\n")
@@ -173,7 +187,9 @@ class ImageUrlDemo:
 
     def run_propagation_pass(self):
         self.print_header("Pass 3 — Propagation Pass")
-        labeled = [r for r in self.results if r.get("identity_name") and r.get("image_url")]
+        labeled = [
+            r for r in self.results if r.get("identity_name") and r.get("image_url")
+        ]
 
         if not labeled:
             print("⚠️  No labeled entries available for propagation — skipping.")
@@ -199,12 +215,16 @@ class ImageUrlDemo:
                 threshold_used = result.get("threshold_used", 0.85)
 
                 status = "✅" if updated_count > 0 else "ℹ️ "
-                print(f"{status} '{r['identity_name']}' — updated_count={updated_count}, "
-                      f"threshold={threshold_used}")
+                print(
+                    f"{status} '{r['identity_name']}' — updated_count={updated_count}, "
+                    f"threshold={threshold_used}"
+                )
                 if conflicts:
                     print(f"   ⚠️  conflicts: {conflicts}")
             except Exception as exc:
-                print(f"❌ propagate_from_image failed for '{r['identity_name']}': {exc}")
+                print(
+                    f"❌ propagate_from_image failed for '{r['identity_name']}': {exc}"
+                )
 
     # ------------------------------------------------------------------
     # Pass 4 — Search Validation
@@ -212,17 +232,21 @@ class ImageUrlDemo:
 
     def run_search_validation(self):
         self.print_header("Pass 4 — Search Validation")
-        labeled_names = sorted({
-            r["identity_name"]
-            for r in self.results
-            if r.get("identity_name") and r.get("vector_id")
-        })
+        labeled_names = sorted(
+            {
+                r["identity_name"]
+                for r in self.results
+                if r.get("identity_name") and r.get("vector_id")
+            }
+        )
 
         if not labeled_names:
             print("⚠️  No labeled identities to validate — skipping.")
             return
 
-        print(f"Validating {len(labeled_names)} labeled identity/identities via GET /v1/search...\n")
+        print(
+            f"Validating {len(labeled_names)} labeled identity/identities via GET /v1/search...\n"
+        )
         for name in labeled_names:
             try:
                 response = self.client.search(identity_name=name, limit=10)
@@ -239,7 +263,9 @@ class ImageUrlDemo:
                             f"{item.get('image_url', '')}"
                         )
                 else:
-                    print(f"⚠️  '{name}' — no results returned. The engine may need a moment to index.")
+                    print(
+                        f"⚠️  '{name}' — no results returned. The engine may need a moment to index."
+                    )
             except Exception as exc:
                 print(f"❌ search failed for '{name}': {exc}")
 
@@ -251,7 +277,9 @@ class ImageUrlDemo:
         self.print_header("Pass 5 — Hybrid Face + Semantic Search")
         first = next((r for r in self.results if r.get("face_vector")), None)
         if not first:
-            print("⚠️  No face_vector available from analyze pass — skipping hybrid search.")
+            print(
+                "⚠️  No face_vector available from analyze pass — skipping hybrid search."
+            )
             return
 
         print(f"Source vector from: {first['image_url']}")
@@ -270,7 +298,9 @@ class ImageUrlDemo:
                 f"weight_source={response.get('weight_source')}"
             )
             if results:
-                header = f"  {'identity_name':<22} {'city':<16} {'confidence':<10} image_url"
+                header = (
+                    f"  {'identity_name':<22} {'city':<16} {'confidence':<10} image_url"
+                )
                 print(header)
                 print(f"  {'-'*22} {'-'*16} {'-'*10} {'-'*40}")
                 for r in results:
@@ -293,7 +323,11 @@ class ImageUrlDemo:
         print(f"  {'-'*45} {'-'*16} {'-'*22} {'-'*36}")
         for r in self.results:
             url_short = r["image_url"].split("?")[0].split("/")[-1]
-            url_display = r["image_url"][:43] + ".." if len(r["image_url"]) > 45 else r["image_url"]
+            url_display = (
+                r["image_url"][:43] + ".."
+                if len(r["image_url"]) > 45
+                else r["image_url"]
+            )
             print(
                 f"  {url_display:<45} "
                 f"{r.get('city', 'n/a'):<16} "
@@ -335,7 +369,9 @@ class ImageUrlDemo:
         self.print_header("Demo Complete")
         print("🎉 Pipeline finished.")
         print("\nNext steps:")
-        print("  • Inspect results in the engine: curl .../v1/search?identity_name=Alex+Rivera")
+        print(
+            "  • Inspect results in the engine: curl .../v1/search?identity_name=Alex+Rivera"
+        )
         print("  • See DEMO.md for curl equivalents and troubleshooting guide")
 
 

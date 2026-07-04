@@ -339,7 +339,9 @@ class GeoIdenti:
         response = self._make_request("GET", endpoint, params=params)
         return response.json()
 
-    def define_cohort_alias(self, alias_name: str, identity_names: List[str]) -> Dict[str, Any]:
+    def define_cohort_alias(
+        self, alias_name: str, identity_names: List[str]
+    ) -> Dict[str, Any]:
         """Create or update a cohort alias (admin role)."""
         endpoint = self._build_url("cohort/alias")
         payload = {"alias_name": alias_name, "identity_names": identity_names}
@@ -380,7 +382,10 @@ class GeoIdenti:
     ) -> Dict[str, Any]:
         """Spread metadata to similar face vectors identified by vector ID."""
         endpoint = self._build_url("label/propagate")
-        payload: Dict[str, Any] = {"vector_id": vector_id, "identity_name": identity_name}
+        payload: Dict[str, Any] = {
+            "vector_id": vector_id,
+            "identity_name": identity_name,
+        }
         if relationship is not None:
             payload["relationship"] = relationship
         if optional_search_field_1 is not None:
@@ -476,7 +481,9 @@ class GeoIdenti:
         response = self._make_request("DELETE", endpoint)
         return response.json()
 
-    def export_subject(self, subject_id: str, *, include_vectors: bool = False) -> Dict[str, Any]:
+    def export_subject(
+        self, subject_id: str, *, include_vectors: bool = False
+    ) -> Dict[str, Any]:
         """Export all data held for a subject (admin)."""
         endpoint = self._build_url(f"privacy/subject/{subject_id}/export")
         params = {"include_vectors": str(include_vectors).lower()}

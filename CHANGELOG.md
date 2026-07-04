@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `response = client.search(...); first = response["items"][0]`
 
 ### Notes
-- Engine baseline pinned for this parity update: `eddeuser-tech/geoidenti-engine` `main` snapshot on 2026-07-03.
+- Engine baseline pinned for this parity update: `eddeuser-tech/geoidenti-engine@a86595c69035018f2fef3b9d91f42002cb26ad82`.
 
 ## [1.1.0] - 2026-04-18
 

@@ -4,9 +4,9 @@ This guide explains how to run the two GeoIdenti SDK demo scripts against the Ge
 
 ## Purpose
 
-### `demo.py` — Quick API Walkthrough (analyst key)
+### `demo.py` — Quick API Walkthrough
 
-Exercises the full read + write surface of the SDK in six sections:
+Exercises core read + write SDK flows in six sections:
 
 | Section | Operation |
 |---|---|
@@ -17,7 +17,7 @@ Exercises the full read + write surface of the SDK in six sections:
 | 5 — Search | `client.search(identity_name=..., limit=5)` filter search |
 | 6 — Hybrid | `client.search_vector(face_vector=..., semantic_query=...)` hybrid search |
 
-### `integration/image_url_demo.py` — Full Pipeline (admin key)
+### `integration/image_url_demo.py` — Full Pipeline (admin-capable token)
 
 Runs a complete biometric identity pipeline across 6 sample URLs from `integration/sample_images.json`:
 
@@ -47,7 +47,9 @@ Runs a complete biometric identity pipeline across 6 sample URLs from `integrati
 
 ## Auth Setup
 
-`demo.py` requires an **analyst-level** JWT. `integration/image_url_demo.py` requires an **admin-level** JWT (the label and propagate endpoints enforce admin role).
+Use a token that can call the selected endpoints in your deployment.
+In stricter role configurations, `integration/image_url_demo.py` requires an
+**admin-level** JWT (label and propagate endpoints enforce admin role).
 
 Obtain your JWT from your GeoIdenti administrator. Set it as an environment variable before running either script.
 
@@ -73,7 +75,7 @@ export GEOIDENTI_BASE_URL="http://localhost:8000/v1"
 ```bash
 cd /path/to/geoidenti-sdk
 
-export GEOIDENTI_API_KEY="<your-analyst-jwt>"
+export GEOIDENTI_API_KEY="<your-jwt-token>"
 export GEOIDENTI_BASE_URL="http://localhost:8000/v1"
 
 python3 demo.py
@@ -84,7 +86,7 @@ python3 demo.py
 ```
 🚀 GeoIdenti SDK — Quick Demo
 ============================================================
-Analyst-level walkthrough:
+Core walkthrough:
   1. Health check    4. Label identity
   2. API status      5. Search by name
   3. Analyze images  6. Hybrid search
@@ -167,12 +169,51 @@ Submitting 6 URL(s) to POST /v1/analyze...
 | Symptom | Fix |
 |---|---|
 | `EnvironmentError: GEOIDENTI_API_KEY is not set` | `export GEOIDENTI_API_KEY="<token>"` |
-| `401 Unauthorized` | Token expired or wrong role — obtain a fresh token from your GeoIdenti administrator (analyst for demo.py, admin for image_url_demo.py) |
+| `401 Unauthorized` | Token expired or missing endpoint permissions for your role profile — obtain a fresh token with the needed scope from your GeoIdenti administrator |
 | `ConnectionRefusedError` / `Connection refused` | Verify the engine is running and `GEOIDENTI_BASE_URL` points to the correct host and port |
 | `analyze()` returns no `vector_id` / empty string | Image URL must be publicly reachable — test with `curl -I <url>` |
 | `propagate updated_count = 0` for all identities | At least one analyze pass with that identity must have run first; check Pass 1 completed successfully |
 | `search()` returns empty list after label | Allow 1–2 seconds for the engine to index the labeled vector, then rerun |
 | `FileNotFoundError: sample_images.json` | Run from the repo root: `python3 integration/image_url_demo.py`, not from inside `integration/` |
+
+---
+
+## Additional SDK methods not exercised end-to-end in demos
+
+The SDK also supports parser, cohort alias, and global propagation endpoints.
+Use these concise runnable examples:
+
+### Parser health
+
+```python
+from geoidenti_sdk import GeoIdenti
+
+client = GeoIdenti(api_key="<your-jwt-token>", base_url="http://localhost:8000/v1")
+result = client.parser_health()
+print(result.get("fast_path", {}).get("status"))
+```
+
+### Full cohort alias flow
+
+```python
+from geoidenti_sdk import GeoIdenti
+
+client = GeoIdenti(api_key="<your-jwt-token>", base_url="http://localhost:8000/v1")
+
+client.define_cohort_alias("incident_team_alpha", ["Alex Rivera", "Jordan Lee"])
+response = client.search_cohort(cohort_alias="incident_team_alpha", match="all", limit=20)
+print(len(response.get("items", [])))
+```
+
+### Global propagation
+
+```python
+from geoidenti_sdk import GeoIdenti
+
+client = GeoIdenti(api_key="<your-admin-jwt>", base_url="http://localhost:8000/v1")
+result = client.propagate_all(threshold=0.4, limit=500, dry_run=True)
+print(result.get("identities_processed"), result.get("total_updated"))
+```
 
 ---
 

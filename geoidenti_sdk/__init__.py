@@ -7,10 +7,37 @@ identity and geospatial metadata indexing.
 Open Source Version - Excludes NDA-protected server components.
 """
 
-import requests
-from typing import Optional, Dict, Any, List
-from urllib.parse import urljoin
 import time
+from typing import Any, Dict, List, Optional, TypedDict
+from urllib.parse import urljoin
+
+import requests
+
+
+class SearchResponseItem(TypedDict, total=False):
+    """One item in the search response envelope."""
+
+    object_id: str
+    image_url: str
+    identity_name: str
+    relationship: str
+    optional_search_field_1: str
+    city: str
+    region: str
+    country: str
+    display_name: str
+    latitude: float
+    longitude: float
+    match_confidence: float
+    timestamp: str
+
+
+class SearchResponse(TypedDict, total=False):
+    """Search envelope returned by engine /v1/search* endpoints."""
+
+    items: List[SearchResponseItem]
+    applied_face_weight: Optional[float]
+    weight_source: Optional[str]
 
 
 class GeoIdenti:
@@ -32,7 +59,7 @@ class GeoIdenti:
         api_key: str,
         base_url: str = "https://api.geoidenti.com/v1",
         timeout: float = 30.0,
-        retries: int = 3
+        retries: int = 3,
     ):
         """
         Initialize the GeoIdenti Client.
@@ -80,7 +107,7 @@ class GeoIdenti:
         Raises:
             requests.HTTPError: If all retries fail
         """
-        kwargs.setdefault('timeout', self.timeout)
+        kwargs.setdefault("timeout", self.timeout)
 
         last_exception = None
         for attempt in range(self.retries):
@@ -88,10 +115,10 @@ class GeoIdenti:
                 response = self.session.request(method, url, **kwargs)
                 response.raise_for_status()
                 return response
-            except requests.RequestException as e:
-                last_exception = e
+            except requests.RequestException as err:
+                last_exception = err
                 if attempt < self.retries - 1:
-                    time.sleep(2 ** attempt)  # Exponential backoff
+                    time.sleep(2**attempt)
                 continue
 
         raise last_exception
@@ -105,6 +132,8 @@ class GeoIdenti:
         optional_search_field_1: Optional[str] = None,
         city: Optional[str] = None,
         country: Optional[str] = None,
+        jurisdiction: Optional[str] = None,
+        purpose: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Scan an image for facial vectors and location data.
@@ -112,27 +141,15 @@ class GeoIdenti:
         Args:
             image_url: URL of the image to analyze.
             identity_name: Optional identity name hint to associate with the image.
-            relationship: Optional relationship label (e.g. "spouse", "sibling").
+            relationship: Optional relationship label.
             optional_search_field_1: Optional custom metadata field.
             city: Optional city override for geospatial metadata.
             country: Optional country override for geospatial metadata.
+            jurisdiction: Optional jurisdiction code for privacy gating.
+            purpose: Optional processing purpose string.
 
         Returns:
-            Dictionary containing analysis results with object_id, vector_id,
-            face_vector, location, timestamp, and inferred_identity (bool).
-
-        Raises:
-            requests.HTTPError: If the API request fails.
-
-        Example:
-            result = client.analyze(
-                "https://example.com/photo.jpg",
-                identity_name="Sarah",
-                city="Seattle",
-                country="USA",
-            )
-            print(f"Location: {result['location']['city']}")
-            print(f"Inferred identity: {result['inferred_identity']}")
+            Dictionary containing analysis results.
         """
         endpoint = self._build_url("analyze")
         payload: Dict[str, Any] = {"image_url": image_url}
@@ -146,27 +163,49 @@ class GeoIdenti:
             payload["city"] = city
         if country is not None:
             payload["country"] = country
+        if jurisdiction is not None:
+            payload["jurisdiction"] = jurisdiction
+        if purpose is not None:
+            payload["purpose"] = purpose
+
+        response = self._make_request("POST", endpoint, json=payload)
+        return response.json()
+
+    def analyze_multi(
+        self,
+        image_url: str,
+        *,
+        identity_name: Optional[str] = None,
+        relationship: Optional[str] = None,
+        optional_search_field_1: Optional[str] = None,
+        city: Optional[str] = None,
+        country: Optional[str] = None,
+        jurisdiction: Optional[str] = None,
+        purpose: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Analyze an image and return one record per detected face."""
+        endpoint = self._build_url("analyze/multi")
+        payload: Dict[str, Any] = {"image_url": image_url}
+        if identity_name is not None:
+            payload["identity_name"] = identity_name
+        if relationship is not None:
+            payload["relationship"] = relationship
+        if optional_search_field_1 is not None:
+            payload["optional_search_field_1"] = optional_search_field_1
+        if city is not None:
+            payload["city"] = city
+        if country is not None:
+            payload["country"] = country
+        if jurisdiction is not None:
+            payload["jurisdiction"] = jurisdiction
+        if purpose is not None:
+            payload["purpose"] = purpose
 
         response = self._make_request("POST", endpoint, json=payload)
         return response.json()
 
     def label_identity(self, vector_id: str, name: str) -> Dict[str, Any]:
-        """
-        Map a specific Face Vector to a human name.
-
-        Args:
-            vector_id: The unique identifier of the face vector.
-            name: The human-readable name to assign (e.g., "Sarah").
-
-        Returns:
-            Dictionary confirming the label mapping.
-
-        Raises:
-            requests.HTTPError: If the API request fails.
-
-        Example:
-            client.label_identity("vec-12345", "Sarah Johnson")
-        """
+        """Map a specific Face Vector to a human name."""
         endpoint = self._build_url("label")
         payload = {"vector_id": vector_id, "name": name}
 
@@ -184,37 +223,16 @@ class GeoIdenti:
         country: Optional[str] = None,
         semantic_query: Optional[str] = None,
         face_weight: Optional[float] = None,
-    ) -> List[Dict[str, Any]]:
+        near_lat: Optional[float] = None,
+        near_lon: Optional[float] = None,
+        radius_km: Optional[float] = None,
+        after: Optional[str] = None,
+        before: Optional[str] = None,
+    ) -> SearchResponse:
         """
         Search the index for matching photos.
 
-        Args:
-            identity_name: Filter by labeled person name (optional).
-            city: Filter by city name (optional).
-            limit: Maximum number of results to return (default: 10).
-            relationship: Filter by relationship label (optional).
-            optional_search_field_1: Filter by custom metadata field (optional).
-            country: Filter by country name (optional).
-            semantic_query: Free-text semantic search string (optional).
-            face_weight: Weight (0.0–1.0) given to face similarity vs. semantic
-                match when blending scores (optional).
-
-        Returns:
-            List of search results. Each item contains image_url, identity_name,
-            city, confidence, region, display_name, latitude, and longitude.
-
-        Raises:
-            requests.HTTPError: If the API request fails.
-
-        Example:
-            results = client.search(
-                identity_name="Sarah",
-                city="Seattle",
-                semantic_query="park",
-                face_weight=0.7,
-            )
-            for result in results:
-                print(f"Found {result['identity_name']} in {result['city']}")
+        Returns the engine envelope: {items, applied_face_weight, weight_source}.
         """
         endpoint = self._build_url("search")
         params: Dict[str, Any] = {"limit": limit}
@@ -232,6 +250,16 @@ class GeoIdenti:
             params["semantic_query"] = semantic_query
         if face_weight is not None:
             params["face_weight"] = face_weight
+        if near_lat is not None:
+            params["near_lat"] = near_lat
+        if near_lon is not None:
+            params["near_lon"] = near_lon
+        if radius_km is not None:
+            params["radius_km"] = radius_km
+        if after is not None:
+            params["after"] = after
+        if before is not None:
+            params["before"] = before
 
         response = self._make_request("GET", endpoint, params=params)
         return response.json()
@@ -248,35 +276,11 @@ class GeoIdenti:
         country: Optional[str] = None,
         face_weight: Optional[float] = None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> SearchResponse:
         """
         Hybrid face+metadata search using a raw face vector.
 
-        Args:
-            face_vector: 128-dimensional face embedding to search against.
-            semantic_query: Free-text semantic search string (optional).
-            identity_name: Filter by labeled person name (optional).
-            relationship: Filter by relationship label (optional).
-            optional_search_field_1: Filter by custom metadata field (optional).
-            city: Filter by city name (optional).
-            country: Filter by country name (optional).
-            face_weight: Weight (0.0–1.0) given to face similarity vs. semantic
-                match when blending scores (optional).
-            limit: Maximum number of results to return (default: 10).
-
-        Returns:
-            List of matching results, each as a dictionary with identity and
-            location metadata.
-
-        Raises:
-            requests.HTTPError: If the API request fails.
-
-        Example:
-            results = client.search_vector(
-                face_vector=[0.1] * 128,
-                semantic_query="park",
-                limit=5,
-            )
+        Returns the engine envelope: {items, applied_face_weight, weight_source}.
         """
         endpoint = self._build_url("search/vector")
         payload: Dict[str, Any] = {"face_vector": face_vector, "limit": limit}
@@ -298,6 +302,52 @@ class GeoIdenti:
         response = self._make_request("POST", endpoint, json=payload)
         return response.json()
 
+    def search_cohort(
+        self,
+        identity_name: Optional[List[str]] = None,
+        *,
+        match: str = "all",
+        cohort_alias: Optional[str] = None,
+        semantic_query: Optional[str] = None,
+        near_lat: Optional[float] = None,
+        near_lon: Optional[float] = None,
+        radius_km: Optional[float] = None,
+        after: Optional[str] = None,
+        before: Optional[str] = None,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        """Search photos containing a cohort of identities."""
+        endpoint = self._build_url("search/cohort")
+        params: Dict[str, Any] = {"match": match, "limit": limit}
+        if identity_name:
+            params["identity_name"] = identity_name
+        if cohort_alias is not None:
+            params["cohort_alias"] = cohort_alias
+        if semantic_query is not None:
+            params["semantic_query"] = semantic_query
+        if near_lat is not None:
+            params["near_lat"] = near_lat
+        if near_lon is not None:
+            params["near_lon"] = near_lon
+        if radius_km is not None:
+            params["radius_km"] = radius_km
+        if after is not None:
+            params["after"] = after
+        if before is not None:
+            params["before"] = before
+
+        response = self._make_request("GET", endpoint, params=params)
+        return response.json()
+
+    def define_cohort_alias(self, alias_name: str, identity_names: List[str]) -> Dict[str, Any]:
+        """Create or update a cohort alias (admin role)."""
+        endpoint = self._build_url("cohort/alias")
+        payload = {"alias_name": alias_name, "identity_names": identity_names}
+        response = self._make_request("POST", endpoint, json=payload)
+        if response.content:
+            return response.json()
+        return {"status": "created"}
+
     def update_metadata(
         self,
         vector_id: str,
@@ -306,31 +356,7 @@ class GeoIdenti:
         relationship: Optional[str] = None,
         optional_search_field_1: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Update relationship and optional metadata for a face vector.
-
-        Note:
-            Requires admin role.
-
-        Args:
-            vector_id: Unique identifier of the face vector to update.
-            name: Identity name to associate with the vector.
-            relationship: Relationship label to assign (optional).
-            optional_search_field_1: Custom metadata field value (optional).
-
-        Returns:
-            Dictionary confirming the metadata update.
-
-        Raises:
-            requests.HTTPError: If the API request fails.
-
-        Example:
-            client.update_metadata(
-                "vec-12345",
-                "Sarah Johnson",
-                relationship="spouse",
-            )
-        """
+        """Update relationship and optional metadata for a face vector."""
         endpoint = self._build_url("metadata")
         payload: Dict[str, Any] = {"vector_id": vector_id, "name": name}
         if relationship is not None:
@@ -344,7 +370,7 @@ class GeoIdenti:
     def propagate_label(
         self,
         vector_id: str,
-        identity_name: str,
+        identity_name: Optional[str],
         *,
         relationship: Optional[str] = None,
         optional_search_field_1: Optional[str] = None,
@@ -352,42 +378,9 @@ class GeoIdenti:
         limit: Optional[int] = None,
         dry_run: Optional[bool] = None,
     ) -> Dict[str, Any]:
-        """
-        Spread metadata to similar face vectors identified by vector ID.
-
-        Note:
-            Requires admin role.
-
-        Args:
-            vector_id: Source face vector whose neighbours will be updated.
-            identity_name: Identity name to propagate to similar vectors.
-            relationship: Relationship label to propagate (optional).
-            optional_search_field_1: Custom metadata field to propagate (optional).
-            similarity_threshold: Minimum cosine similarity to qualify a neighbour
-                (optional, engine default used if omitted).
-            limit: Maximum number of vectors to update (optional).
-            dry_run: If True, simulate the operation without writing changes
-                (optional).
-
-        Returns:
-            Dictionary with propagation result summary.
-
-        Raises:
-            requests.HTTPError: If the API request fails.
-
-        Example:
-            result = client.propagate_label(
-                "vec-12345",
-                "Sarah Johnson",
-                similarity_threshold=0.85,
-                dry_run=True,
-            )
-        """
+        """Spread metadata to similar face vectors identified by vector ID."""
         endpoint = self._build_url("label/propagate")
-        payload: Dict[str, Any] = {
-            "vector_id": vector_id,
-            "identity_name": identity_name,
-        }
+        payload: Dict[str, Any] = {"vector_id": vector_id, "identity_name": identity_name}
         if relationship is not None:
             payload["relationship"] = relationship
         if optional_search_field_1 is not None:
@@ -405,7 +398,7 @@ class GeoIdenti:
     def propagate_from_image(
         self,
         image_url: str,
-        identity_name: str,
+        identity_name: Optional[str],
         *,
         relationship: Optional[str] = None,
         optional_search_field_1: Optional[str] = None,
@@ -413,43 +406,7 @@ class GeoIdenti:
         limit: Optional[int] = None,
         dry_run: Optional[bool] = None,
     ) -> Dict[str, Any]:
-        """
-        Spread metadata to similar face vectors identified by source image.
-
-        Note:
-            Requires admin role.
-
-        Args:
-            image_url: URL of the source image whose face embedding is used.
-            identity_name: Identity name to propagate to similar vectors.
-            relationship: Relationship label to propagate (optional).
-            optional_search_field_1: Custom metadata field to propagate (optional).
-            similarity_threshold: Minimum cosine similarity to qualify a neighbour
-                (optional, engine default used if omitted).
-            limit: Maximum number of vectors to update (optional).
-            dry_run: If True, simulate the operation without writing changes
-                (optional).
-
-        Returns:
-            Dictionary containing:
-            - updated_count (int): Number of vectors updated.
-            - vector_ids_updated (List[str]): IDs of updated vectors.
-            - conflicts (List): Any conflicting existing labels encountered.
-            - dry_run (bool): Whether this was a dry-run.
-            - threshold_used (float): The similarity threshold applied.
-
-        Raises:
-            requests.HTTPError: If the API request fails.
-
-        Example:
-            result = client.propagate_from_image(
-                "https://example.com/photo.jpg",
-                "Sarah Johnson",
-                similarity_threshold=0.85,
-                dry_run=True,
-            )
-            print(f"Would update {result['updated_count']} vectors")
-        """
+        """Spread metadata to similar face vectors identified by source image."""
         endpoint = self._build_url("analyze/propagate")
         payload: Dict[str, Any] = {
             "image_url": image_url,
@@ -469,46 +426,130 @@ class GeoIdenti:
         response = self._make_request("POST", endpoint, json=payload)
         return response.json()
 
+    def propagate_all(
+        self,
+        *,
+        threshold: Optional[float] = None,
+        limit: Optional[int] = None,
+        dry_run: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """Re-propagate identity metadata across all labeled identities (admin)."""
+        endpoint = self._build_url("propagate/all")
+        payload: Dict[str, Any] = {}
+        if threshold is not None:
+            payload["threshold"] = threshold
+        if limit is not None:
+            payload["limit"] = limit
+        if dry_run is not None:
+            payload["dry_run"] = dry_run
+
+        response = self._make_request("POST", endpoint, json=payload)
+        return response.json()
+
+    def parser_health(self) -> Dict[str, Any]:
+        """Check parser subsystem health and backend status."""
+        endpoint = self._build_url("parser/health")
+        response = self._make_request("GET", endpoint)
+        return response.json()
+
+    def record_consent(
+        self,
+        subject_id: str,
+        lawful_basis: str,
+        purpose: str,
+        jurisdiction: str,
+    ) -> Dict[str, Any]:
+        """Record subject consent (admin)."""
+        endpoint = self._build_url("consent")
+        payload = {
+            "subject_id": subject_id,
+            "lawful_basis": lawful_basis,
+            "purpose": purpose,
+            "jurisdiction": jurisdiction,
+        }
+        response = self._make_request("POST", endpoint, json=payload)
+        return response.json()
+
+    def withdraw_consent(self, subject_id: str) -> Dict[str, Any]:
+        """Withdraw subject consent and queue erasure (admin)."""
+        endpoint = self._build_url(f"consent/{subject_id}")
+        response = self._make_request("DELETE", endpoint)
+        return response.json()
+
+    def export_subject(self, subject_id: str, *, include_vectors: bool = False) -> Dict[str, Any]:
+        """Export all data held for a subject (admin)."""
+        endpoint = self._build_url(f"privacy/subject/{subject_id}/export")
+        params = {"include_vectors": str(include_vectors).lower()}
+        response = self._make_request("GET", endpoint, params=params)
+        return response.json()
+
+    def rectify_subject(
+        self,
+        subject_id: str,
+        *,
+        identity_name: Optional[str] = None,
+        relationship: Optional[str] = None,
+        optional_search_field_1: Optional[str] = None,
+        city: Optional[str] = None,
+        region: Optional[str] = None,
+        country: Optional[str] = None,
+        display_name: Optional[str] = None,
+        purpose: Optional[str] = None,
+        jurisdiction: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Rectify subject metadata across stored points (admin)."""
+        endpoint = self._build_url(f"privacy/subject/{subject_id}")
+        payload: Dict[str, Any] = {}
+        if identity_name is not None:
+            payload["identity_name"] = identity_name
+        if relationship is not None:
+            payload["relationship"] = relationship
+        if optional_search_field_1 is not None:
+            payload["optional_search_field_1"] = optional_search_field_1
+        if city is not None:
+            payload["city"] = city
+        if region is not None:
+            payload["region"] = region
+        if country is not None:
+            payload["country"] = country
+        if display_name is not None:
+            payload["display_name"] = display_name
+        if purpose is not None:
+            payload["purpose"] = purpose
+        if jurisdiction is not None:
+            payload["jurisdiction"] = jurisdiction
+
+        response = self._make_request("PATCH", endpoint, json=payload)
+        return response.json()
+
+    def erase_subject(self, subject_id: str) -> Dict[str, Any]:
+        """Erase all data for a subject (admin)."""
+        endpoint = self._build_url(f"privacy/subject/{subject_id}")
+        response = self._make_request("DELETE", endpoint)
+        return response.json()
+
+    def retention_preview(self) -> Dict[str, Any]:
+        """Preview records that would be purged by retention policy (admin)."""
+        endpoint = self._build_url("privacy/retention/preview")
+        response = self._make_request("GET", endpoint)
+        return response.json()
+
     def status(self) -> Dict[str, Any]:
-        """
-        Get API status information.
-
-        Returns:
-            Dictionary containing API status, authentication info, and role.
-
-        Raises:
-            requests.HTTPError: If the API request fails.
-
-        Example:
-            status = client.status()
-            print(f"API Status: {status['status']}")
-        """
+        """Get API status information."""
         endpoint = self._build_url("status")
         response = self._make_request("GET", endpoint)
         return response.json()
 
     def health(self) -> Dict[str, Any]:
-        """
-        Get health check information (no authentication required).
-
-        Returns:
-            Dictionary containing health status, version, and timestamp.
-
-        Raises:
-            requests.HTTPError: If the health check fails.
-
-        Example:
-            health = client.health()
-            print(f"Service is {health['status']}")
-        """
+        """Get health check information (no authentication required)."""
         endpoint = self._build_url("health", base_url=self.health_base_url)
-        # Health endpoint doesn't require authentication
         response = requests.get(
             endpoint,
             timeout=self.timeout,
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
         response.raise_for_status()
         return response.json()
 
-__version__ = "1.1.0"
+
+__version__ = "2.0.0"

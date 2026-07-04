@@ -5,6 +5,39 @@ All notable changes to the GeoIdenti SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-07-03
+
+### Added
+- Engine parity methods for latest API surface:
+  - `analyze_multi()` — POST `/v1/analyze/multi`
+  - `search_cohort()` — GET `/v1/search/cohort`
+  - `define_cohort_alias()` — POST `/v1/cohort/alias` (admin)
+  - `parser_health()` — GET `/v1/parser/health`
+  - `propagate_all()` — POST `/v1/propagate/all` (admin)
+  - Privacy/consent methods (admin): `record_consent()`, `withdraw_consent()`,
+    `export_subject()`, `rectify_subject()`, `erase_subject()`, `retention_preview()`
+- `analyze()` and `analyze_multi()` now accept `jurisdiction` and `purpose`.
+- `search()` now accepts geo/time filters: `near_lat`, `near_lon`, `radius_km`, `after`, `before`.
+
+### Changed
+- Version metadata aligned to `2.0.0` across package and module.
+- SDK demos updated to consume the engine search envelope.
+
+### Breaking Changes
+- `search()` now returns the engine envelope object (not a plain list):
+  `{ "items": [...], "applied_face_weight": float|null, "weight_source": str|null }`
+- `search_vector()` now returns the same envelope object (not a plain list).
+- Search result confidence field consumed from engine as `match_confidence`.
+
+### Migration
+- Before:
+  `results = client.search(...); first = results[0]`
+- After:
+  `response = client.search(...); first = response["items"][0]`
+
+### Notes
+- Engine baseline pinned for this parity update: `eddeuser-tech/geoidenti-engine` `main` snapshot on 2026-07-03.
+
 ## [1.1.0] - 2026-04-18
 
 ### Added

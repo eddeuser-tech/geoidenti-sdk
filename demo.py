@@ -118,8 +118,14 @@ class GeoIdentiDemo:
 
     def section_search(self):
         self.print_header("Section 5 — Search by Identity")
-        results = self.client.search(identity_name="Alex Rivera", limit=5)
+        response = self.client.search(identity_name="Alex Rivera", limit=5)
+        results = response.get("items", [])
         print(f"✅ {len(results)} result(s) for identity_name='Alex Rivera'\n")
+        print(
+            "   applied_face_weight="
+            f"{response.get('applied_face_weight')} "
+            f"weight_source={response.get('weight_source')}"
+        )
         if results:
             header = f"  {'identity_name':<22} {'city':<16} {'confidence':<10} image_url"
             print(header)
@@ -128,7 +134,7 @@ class GeoIdentiDemo:
                 print(
                     f"  {r.get('identity_name',''):<22} "
                     f"{r.get('city',''):<16} "
-                    f"{str(r.get('confidence','')):<10} "
+                    f"{str(r.get('match_confidence','')):<10} "
                     f"{r.get('image_url','')}"
                 )
         else:
@@ -144,12 +150,18 @@ class GeoIdentiDemo:
         if not face_vector:
             print("⚠️  First analyze result has no face_vector — skipping hybrid search.")
             return
-        results = self.client.search_vector(
+        response = self.client.search_vector(
             face_vector=face_vector,
             semantic_query="outdoor portrait",
             limit=5,
         )
+        results = response.get("items", [])
         print(f"✅ {len(results)} result(s) — face vector × semantic_query='outdoor portrait'\n")
+        print(
+            "   applied_face_weight="
+            f"{response.get('applied_face_weight')} "
+            f"weight_source={response.get('weight_source')}"
+        )
         if results:
             header = f"  {'identity_name':<22} {'city':<16} {'confidence':<10} image_url"
             print(header)
@@ -158,7 +170,7 @@ class GeoIdentiDemo:
                 print(
                     f"  {r.get('identity_name',''):<22} "
                     f"{r.get('city',''):<16} "
-                    f"{str(r.get('confidence','')):<10} "
+                    f"{str(r.get('match_confidence','')):<10} "
                     f"{r.get('image_url','')}"
                 )
 

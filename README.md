@@ -48,8 +48,8 @@ print(f"Found face at {result['location']['city']}, {result['location']['country
 client.label_identity(vector_id=result['vector_id'], name="Sarah Johnson")
 
 # Search for photos by identity or location
-results = client.search(identity_name="Sarah", city="Seattle", limit=20)
-for photo in results:
+response = client.search(identity_name="Sarah", city="Seattle", limit=20)
+for photo in response["items"]:
     print(f"Found {photo['identity_name']} in {photo['city']}")
 
 # Check API status
@@ -125,7 +125,7 @@ Assigns a human-readable name to a face vector.
 client.label_identity("vec-12345", "John Smith")
 ```
 
-#### `search(identity_name=None, city=None, limit=10, *, relationship=None, optional_search_field_1=None, country=None, semantic_query=None, face_weight=None) -> List[Dict]`
+#### `search(identity_name=None, city=None, limit=10, *, relationship=None, optional_search_field_1=None, country=None, semantic_query=None, face_weight=None, near_lat=None, near_lon=None, radius_km=None, after=None, before=None) -> Dict[str, Any]`
 
 Searches the biometric index for matching photos.
 
@@ -138,24 +138,31 @@ Searches the biometric index for matching photos.
 - `country` (str, optional): Filter by country name
 - `semantic_query` (str, optional): Free-text semantic search string
 - `face_weight` (float, optional): Weight (0.0–1.0) given to face similarity vs. semantic match
+- `near_lat`, `near_lon`, `radius_km` (float, optional): geo-radius filter params
+- `after`, `before` (str, optional): inclusive time-range filter params
 
-**Returns:** List of matching photos. Each item contains:
-- `image_url`, `identity_name`, `city`, `confidence`
+**Returns:** Search response envelope:
+- `items`: list of matching photos
+- `applied_face_weight`: effective face-weight used by the engine
+- `weight_source`: source of weight selection (`explicit`, `adaptive`, `default`)
+
+Each `items` entry contains:
+- `image_url`, `identity_name`, `city`, `match_confidence`
 - `region`, `display_name`, `latitude`, `longitude`
 
 **Example:**
 ```python
-photos = client.search(
+response = client.search(
     identity_name="Sarah",
     city="Seattle",
     semantic_query="park",
     face_weight=0.7,
 )
-for photo in photos:
+for photo in response["items"]:
     print(f"Found {photo['identity_name']} at {photo['image_url']}")
 ```
 
-#### `search_vector(face_vector, *, semantic_query=None, identity_name=None, relationship=None, optional_search_field_1=None, city=None, country=None, face_weight=None, limit=10) -> List[Dict]`
+#### `search_vector(face_vector, *, semantic_query=None, identity_name=None, relationship=None, optional_search_field_1=None, city=None, country=None, face_weight=None, limit=10) -> Dict[str, Any]`
 
 Hybrid face+metadata search using a raw 128-dimensional face vector.
 
@@ -170,16 +177,43 @@ Hybrid face+metadata search using a raw 128-dimensional face vector.
 - `face_weight` (float, optional): Weight (0.0–1.0) given to face similarity vs. semantic match
 - `limit` (int, optional): Maximum results (default: 10)
 
-**Returns:** List of matching results with identity and location metadata
+**Returns:** Search response envelope: `{items, applied_face_weight, weight_source}`
 
 **Example:**
 ```python
-results = client.search_vector(
+response = client.search_vector(
     face_vector=[0.1] * 128,
     semantic_query="park",
     city="Seattle",
     limit=5,
 )
+print(response["weight_source"])
+for item in response["items"]:
+    print(item["identity_name"])
+```
+
+#### Additional parity methods
+
+- `analyze_multi(...)` -> `POST /v1/analyze/multi`
+- `parser_health()` -> `GET /v1/parser/health`
+- `propagate_all(...)` -> `POST /v1/propagate/all` (admin)
+- `search_cohort(...)` -> `GET /v1/search/cohort`
+- `define_cohort_alias(...)` -> `POST /v1/cohort/alias` (admin)
+- Privacy/consent (admin): `record_consent`, `withdraw_consent`, `export_subject`, `rectify_subject`, `erase_subject`, `retention_preview`
+
+## Breaking Change (v2.0.0)
+
+- `search()` and `search_vector()` now return the engine response envelope instead of plain lists.
+- Migration:
+
+```python
+# v1.x
+results = client.search(identity_name="Sarah")
+first = results[0]
+
+# v2.x
+response = client.search(identity_name="Sarah")
+first = response["items"][0]
 ```
 
 #### `update_metadata(vector_id, name, *, relationship=None, optional_search_field_1=None) -> Dict[str, Any]`

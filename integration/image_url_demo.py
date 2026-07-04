@@ -225,7 +225,8 @@ class ImageUrlDemo:
         print(f"Validating {len(labeled_names)} labeled identity/identities via GET /v1/search...\n")
         for name in labeled_names:
             try:
-                results = self.client.search(identity_name=name, limit=10)
+                response = self.client.search(identity_name=name, limit=10)
+                results = response.get("items", [])
                 if results:
                     print(f"✅ '{name}' — {len(results)} result(s) returned")
                     header = f"   {'city':<16} {'confidence':<10} image_url"
@@ -234,7 +235,7 @@ class ImageUrlDemo:
                     for item in results:
                         print(
                             f"   {item.get('city', ''):<16} "
-                            f"{str(item.get('confidence', '')):<10} "
+                            f"{str(item.get('match_confidence', '')):<10} "
                             f"{item.get('image_url', '')}"
                         )
                 else:
@@ -256,12 +257,18 @@ class ImageUrlDemo:
         print(f"Source vector from: {first['image_url']}")
         print("semantic_query='family outdoor', limit=5\n")
         try:
-            results = self.client.search_vector(
+            response = self.client.search_vector(
                 face_vector=first["face_vector"],
                 semantic_query="family outdoor",
                 limit=5,
             )
+            results = response.get("items", [])
             print(f"✅ {len(results)} result(s)\n")
+            print(
+                "   applied_face_weight="
+                f"{response.get('applied_face_weight')} "
+                f"weight_source={response.get('weight_source')}"
+            )
             if results:
                 header = f"  {'identity_name':<22} {'city':<16} {'confidence':<10} image_url"
                 print(header)
@@ -270,7 +277,7 @@ class ImageUrlDemo:
                     print(
                         f"  {r.get('identity_name', ''):<22} "
                         f"{r.get('city', ''):<16} "
-                        f"{str(r.get('confidence', '')):<10} "
+                        f"{str(r.get('match_confidence', '')):<10} "
                         f"{r.get('image_url', '')}"
                     )
         except Exception as exc:

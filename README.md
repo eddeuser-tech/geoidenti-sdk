@@ -48,8 +48,8 @@ print(f"Found face at {result['location']['city']}, {result['location']['country
 client.label_identity(vector_id=result['vector_id'], name="Sarah Johnson")
 
 # Search for photos by identity or location
-results = client.search(identity_name="Sarah", city="Seattle", limit=20)
-for photo in results:
+response = client.search(identity_name="Sarah", city="Seattle", limit=20)
+for photo in response["items"]:
     print(f"Found {photo['identity_name']} in {photo['city']}")
 
 # Check API status
@@ -76,209 +76,183 @@ client = GeoIdenti(
 
 ### Methods
 
-#### `analyze(image_url, *, identity_name=None, relationship=None, optional_search_field_1=None, city=None, country=None) -> Dict[str, Any]`
+#### Demo coverage
 
-Analyzes an image for facial features and geospatial metadata.
+- `demo.py` is a quick walkthrough for `health`, `status`, `analyze`, `label_identity`, `search`, and `search_vector`.
+- `integration/image_url_demo.py` is an admin pipeline demo for analyze/label/
+  propagate/search workflows.
+- Cohort and privacy methods are available in the SDK and documented below, but
+  not exercised end-to-end in the quick demo.
+- If your engine enforces strict roles, use an admin token for methods in the **Admin methods** section.
+
+## Breaking Change (v2.0.0)
+
+- `search()` and `search_vector()` return the engine response envelope instead
+  of plain lists.
+
+```python
+# v1.x
+results = client.search(identity_name="Sarah")
+first = results[0]
+
+# v2.x
+response = client.search(identity_name="Sarah")
+first = response["items"][0]
+```
+
+### Analyst / standard methods
+
+#### `analyze(image_url, *, identity_name=None, relationship=None, optional_search_field_1=None, city=None, country=None, jurisdiction=None, purpose=None) -> Dict[str, Any]`
+
+Analyze an image for biometric and geospatial metadata.
 
 **Parameters:**
 - `image_url` (str): URL of the image to analyze
-- `identity_name` (str, optional): Identity name hint to associate with the image
-- `relationship` (str, optional): Relationship label (e.g. `"spouse"`, `"sibling"`)
+- `identity_name` (str, optional): Identity hint to associate with the image
+- `relationship` (str, optional): Relationship label
 - `optional_search_field_1` (str, optional): Custom metadata field
-- `city` (str, optional): City override for geospatial metadata
-- `country` (str, optional): Country override for geospatial metadata
+- `city`, `country` (str, optional): Geospatial overrides
+- `jurisdiction` (str, optional): Privacy jurisdiction code
+- `purpose` (str, optional): Processing purpose label
 
-**Returns:** Dictionary containing:
-- `object_id`: Unique object identifier
-- `vector_id`: Face vector identifier
-- `face_vector`: 128-dimensional face embedding
-- `location`: Geospatial metadata (city, country, coordinates)
-- `timestamp`: Analysis timestamp
-- `inferred_identity` (bool): Whether the identity was inferred by the engine
+**Returns:** Analysis envelope that may include `object_id`, `vector_id`,
+`face_vector`, `location`, `timestamp`, and `inferred_identity`.
 
-**Example:**
+#### `analyze_multi(image_url, *, identity_name=None, relationship=None, optional_search_field_1=None, city=None, country=None, jurisdiction=None, purpose=None) -> Dict[str, Any]`
+
+Analyze an image and return one record per detected face.
+
+#### `search(identity_name=None, city=None, limit=10, *, relationship=None, optional_search_field_1=None, country=None, semantic_query=None, face_weight=None, near_lat=None, near_lon=None, radius_km=None, after=None, before=None) -> Dict[str, Any]`
+
+Search photos by identity, location, metadata, semantic query, and geo/time
+filters.
+
+**Returns:** Search response envelope:
+- `items`: List of matches
+- `applied_face_weight`: Effective face weight used by engine
+- `weight_source`: `explicit`, `adaptive`, or `default`
+
+Each item may include fields like `image_url`, `identity_name`, `city`,
+`match_confidence`, `region`, `display_name`, `latitude`, and `longitude`.
+
+#### `search_vector(face_vector, *, semantic_query=None, identity_name=None, relationship=None, optional_search_field_1=None, city=None, country=None, face_weight=None, limit=10) -> Dict[str, Any]`
+
+Hybrid face+semantic+metadata search using a raw 128-d face vector.
+
+**Returns:** Same envelope as `search()`.
+
+#### `search_cohort(identity_name=None, *, match="all", cohort_alias=None, semantic_query=None, near_lat=None, near_lon=None, radius_km=None, after=None, before=None, limit=20) -> Dict[str, Any]`
+
+Search photos containing groups of identities, with optional alias and
+geo/time/semantic filters.
+
+Example full cohort alias flow:
+
 ```python
-result = client.analyze(
-    "https://example.com/vacation.jpg",
-    identity_name="Sarah",
-    city="Seattle",
-    country="USA",
+# 1) define the cohort alias (admin-capable token required)
+client.define_cohort_alias("incident_team_alpha", ["Alex Rivera", "Jordan Lee"])
+
+# 2) search by alias
+response = client.search_cohort(
+    cohort_alias="incident_team_alpha",
+    match="all",
+    semantic_query="parking garage",
+    limit=20,
 )
-print(f"Face found in {result['location']['city']}")
-print(f"Inferred identity: {result['inferred_identity']}")
+
+for item in response.get("items", []):
+    print(item.get("identity_name"), item.get("image_url"))
 ```
 
-#### `label_identity(vector_id, name) -> Dict[str, Any]`
+#### `parser_health() -> Dict[str, Any]`
 
-Assigns a human-readable name to a face vector.
+Get parser subsystem health and backend status.
 
-> **Requires admin role.**
-
-**Parameters:**
-- `vector_id` (str): Unique identifier of the face vector
-- `name` (str): Human-readable name (e.g., "Sarah Johnson")
-
-**Returns:** Confirmation of the labeling operation
-
-**Example:**
 ```python
-client.label_identity("vec-12345", "John Smith")
-```
-
-#### `search(identity_name=None, city=None, limit=10, *, relationship=None, optional_search_field_1=None, country=None, semantic_query=None, face_weight=None) -> List[Dict]`
-
-Searches the biometric index for matching photos.
-
-**Parameters:**
-- `identity_name` (str, optional): Filter by person name
-- `city` (str, optional): Filter by city name
-- `limit` (int, optional): Maximum results (default: 10)
-- `relationship` (str, optional): Filter by relationship label
-- `optional_search_field_1` (str, optional): Filter by custom metadata field
-- `country` (str, optional): Filter by country name
-- `semantic_query` (str, optional): Free-text semantic search string
-- `face_weight` (float, optional): Weight (0.0–1.0) given to face similarity vs. semantic match
-
-**Returns:** List of matching photos. Each item contains:
-- `image_url`, `identity_name`, `city`, `confidence`
-- `region`, `display_name`, `latitude`, `longitude`
-
-**Example:**
-```python
-photos = client.search(
-    identity_name="Sarah",
-    city="Seattle",
-    semantic_query="park",
-    face_weight=0.7,
-)
-for photo in photos:
-    print(f"Found {photo['identity_name']} at {photo['image_url']}")
-```
-
-#### `search_vector(face_vector, *, semantic_query=None, identity_name=None, relationship=None, optional_search_field_1=None, city=None, country=None, face_weight=None, limit=10) -> List[Dict]`
-
-Hybrid face+metadata search using a raw 128-dimensional face vector.
-
-**Parameters:**
-- `face_vector` (List[float]): 128-dimensional face embedding to search against
-- `semantic_query` (str, optional): Free-text semantic search string
-- `identity_name` (str, optional): Filter by person name
-- `relationship` (str, optional): Filter by relationship label
-- `optional_search_field_1` (str, optional): Filter by custom metadata field
-- `city` (str, optional): Filter by city name
-- `country` (str, optional): Filter by country name
-- `face_weight` (float, optional): Weight (0.0–1.0) given to face similarity vs. semantic match
-- `limit` (int, optional): Maximum results (default: 10)
-
-**Returns:** List of matching results with identity and location metadata
-
-**Example:**
-```python
-results = client.search_vector(
-    face_vector=[0.1] * 128,
-    semantic_query="park",
-    city="Seattle",
-    limit=5,
-)
-```
-
-#### `update_metadata(vector_id, name, *, relationship=None, optional_search_field_1=None) -> Dict[str, Any]`
-
-Updates relationship and optional metadata fields for a face vector.
-
-> **Requires admin role.**
-
-**Parameters:**
-- `vector_id` (str): Unique identifier of the face vector to update
-- `name` (str): Identity name to associate with the vector
-- `relationship` (str, optional): Relationship label to assign
-- `optional_search_field_1` (str, optional): Custom metadata field value
-
-**Returns:** Dictionary confirming the metadata update
-
-**Example:**
-```python
-client.update_metadata(
-    "vec-12345",
-    "Sarah Johnson",
-    relationship="spouse",
-    optional_search_field_1="badge-99",
-)
-```
-
-#### `propagate_label(vector_id, identity_name, *, relationship=None, optional_search_field_1=None, similarity_threshold=None, limit=None, dry_run=None) -> Dict[str, Any]`
-
-Spreads metadata to similar face vectors identified by a source vector ID.
-
-> **Requires admin role.**
-
-**Parameters:**
-- `vector_id` (str): Source face vector whose neighbours will be updated
-- `identity_name` (str): Identity name to propagate to similar vectors
-- `relationship` (str, optional): Relationship label to propagate
-- `optional_search_field_1` (str, optional): Custom metadata field to propagate
-- `similarity_threshold` (float, optional): Minimum cosine similarity to qualify a neighbour
-- `limit` (int, optional): Maximum number of vectors to update
-- `dry_run` (bool, optional): If `True`, simulate without writing changes
-
-**Returns:** Dictionary with propagation result summary
-
-**Example:**
-```python
-result = client.propagate_label(
-    "vec-12345",
-    "Sarah Johnson",
-    similarity_threshold=0.85,
-    dry_run=True,
-)
-print(f"Would update {result['updated_count']} vectors")
-```
-
-#### `propagate_from_image(image_url, identity_name, *, relationship=None, optional_search_field_1=None, similarity_threshold=None, limit=None, dry_run=None) -> Dict[str, Any]`
-
-Spreads metadata to similar face vectors identified by a source image.
-
-> **Requires admin role.**
-
-**Parameters:**
-- `image_url` (str): URL of the source image whose face embedding is used
-- `identity_name` (str): Identity name to propagate to similar vectors
-- `relationship` (str, optional): Relationship label to propagate
-- `optional_search_field_1` (str, optional): Custom metadata field to propagate
-- `similarity_threshold` (float, optional): Minimum cosine similarity to qualify a neighbour
-- `limit` (int, optional): Maximum number of vectors to update
-- `dry_run` (bool, optional): If `True`, simulate without writing changes
-
-**Returns:** Dictionary containing:
-- `updated_count` (int): Number of vectors updated
-- `vector_ids_updated` (List[str]): IDs of updated vectors
-- `conflicts` (List): Conflicting existing labels encountered
-- `dry_run` (bool): Whether this was a dry-run
-- `threshold_used` (float): The similarity threshold applied
-
-**Example:**
-```python
-result = client.propagate_from_image(
-    "https://example.com/photo.jpg",
-    "Sarah Johnson",
-    similarity_threshold=0.85,
-    dry_run=False,
-)
-print(f"Updated {result['updated_count']} vectors")
-print(f"IDs: {result['vector_ids_updated']}")
+health = client.parser_health()
+print(health.get("fast_path", {}).get("status"))
+print(health.get("llm", {}).get("status"))
 ```
 
 #### `status() -> Dict[str, Any]`
 
-Retrieves API status and authentication information.
-
-**Returns:** API status, user role, and authentication details
+Get authenticated API status.
 
 #### `health() -> Dict[str, Any]`
 
-Performs a health check (no authentication required).
+Health check endpoint (no authentication required).
 
-**Returns:** Service health status and version information
+### Admin methods
+
+All methods in this section require an admin-capable token.
+
+#### `label_identity(vector_id, name) -> Dict[str, Any]`
+
+Map a face vector to a human-readable identity name.
+
+#### `update_metadata(vector_id, name, *, relationship=None, optional_search_field_1=None) -> Dict[str, Any]`
+
+Update relationship and optional metadata for a face vector.
+
+#### `propagate_label(vector_id, identity_name, *, relationship=None, optional_search_field_1=None, similarity_threshold=None, limit=None, dry_run=None) -> Dict[str, Any]`
+
+Propagate metadata to similar vectors from a source vector.
+
+#### `propagate_from_image(image_url, identity_name, *, relationship=None, optional_search_field_1=None, similarity_threshold=None, limit=None, dry_run=None) -> Dict[str, Any]`
+
+Propagate metadata to similar vectors from a source image.
+
+#### `propagate_all(*, threshold=None, limit=None, dry_run=None) -> Dict[str, Any]`
+
+Re-propagate identity metadata across all labeled identities.
+
+```python
+result = client.propagate_all(threshold=0.4, limit=500, dry_run=True)
+print(result.get("identities_processed"), result.get("total_updated"))
+```
+
+#### `define_cohort_alias(alias_name, identity_names) -> Dict[str, Any]`
+
+Create or update a named cohort alias.
+
+#### `record_consent(subject_id, lawful_basis, purpose, jurisdiction) -> Dict[str, Any]`
+
+Record consent and lawful basis for a subject.
+
+```python
+result = client.record_consent(
+    subject_id="subject-123",
+    lawful_basis="consent",
+    purpose="verification",
+    jurisdiction="EU",
+)
+print(result)
+```
+
+#### `withdraw_consent(subject_id) -> Dict[str, Any]`
+
+Withdraw consent and queue erasure workflow.
+
+#### `export_subject(subject_id, *, include_vectors=False) -> Dict[str, Any]`
+
+Export subject data.
+
+#### `rectify_subject(subject_id, *, identity_name=None, relationship=None, optional_search_field_1=None, city=None, region=None, country=None, display_name=None, purpose=None, jurisdiction=None) -> Dict[str, Any]`
+
+Rectify subject metadata fields across stored records.
+
+#### `erase_subject(subject_id) -> Dict[str, Any]`
+
+Erase all retained data for a subject.
+
+#### `retention_preview() -> Dict[str, Any]`
+
+Preview retention-policy purge candidates.
+
+### Engine baseline
+
+This v2 parity update is aligned to engine commit
+`a86595c69035018f2fef3b9d91f42002cb26ad82`.
 
 ## Error Handling
 
@@ -345,15 +319,16 @@ pip install -e ".[dev]"
 ### Run Tests
 
 ```bash
-pytest tests/
+python3 -m pytest tests/
 ```
 
 ### Code Quality
 
 ```bash
-black geoidenti_sdk/
-isort geoidenti_sdk/
-flake8 geoidenti_sdk/
+python3 -m black geoidenti_sdk/ tests demo.py integration/image_url_demo.py
+python3 -m isort geoidenti_sdk/ tests
+python3 -m flake8 geoidenti_sdk/
+python3 -m pytest --cov=geoidenti_sdk --cov-report=html
 ```
 
 ## Contributing
@@ -381,20 +356,4 @@ If you discover a security vulnerability, please email security@geoidenti.com in
 
 ## Changelog
 
-### v1.1.0 (2026-04-18)
-- Added `search_vector()` — hybrid face+metadata search via POST /v1/search/vector
-- Added `update_metadata()` — update identity name, relationship, and optional metadata (admin)
-- Added `propagate_label()` — spread metadata to similar vectors by source vector ID (admin)
-- Added `propagate_from_image()` — spread metadata to similar vectors by source image (admin)
-- Extended `analyze()` with optional `identity_name`, `relationship`, `optional_search_field_1`, `city`, `country` params
-- Extended `search()` with optional `relationship`, `optional_search_field_1`, `country`, `semantic_query`, `face_weight` params
-- Documented `inferred_identity` field in `analyze()` response
-- Documented `region`, `display_name`, `latitude`, `longitude` fields in `search()` response
-- Admin role requirement noted for `label_identity`, `update_metadata`, `propagate_label`, `propagate_from_image`
-
-### v1.0.0 (2026-04-09)
-- Initial open source release
-- Complete API client implementation
-- Comprehensive error handling and retry logic
-- Production-ready authentication and timeout handling</content>
-<parameter name="filePath">/Users/kristideuser/geoidenti-engine/geoidenti-sdk/README.md
+See [CHANGELOG.md](CHANGELOG.md) for complete release history.

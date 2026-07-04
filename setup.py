@@ -12,7 +12,7 @@ with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name="geoidenti-sdk",
-    version="1.0.0",
+    version="2.0.0",
     author="GeoIdenti Team",
     author_email="sdk@geoidenti.com",
     description="Python SDK for GeoIdenti biometric and geospatial API",

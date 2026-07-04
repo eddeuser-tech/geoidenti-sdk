@@ -17,8 +17,9 @@ Requirements:
   pip install geoidenti-sdk
 
 Auth:
-  Analyst-level API key is sufficient for all sections.
-  export GEOIDENTI_API_KEY="<your-analyst-jwt>"
+    Use a token that can call the selected endpoints.
+    Some deployments require admin role for label operations.
+    export GEOIDENTI_API_KEY="<your-jwt-token>"
   export GEOIDENTI_BASE_URL="http://localhost:8000/v1"  # optional
 
 Usage:
@@ -62,9 +63,9 @@ class GeoIdentiDemo:
             print(
                 "\n❌  GEOIDENTI_API_KEY is not set.\n"
                 "\n"
-                "   Export your analyst JWT before running:\n"
-                "     export GEOIDENTI_API_KEY=\"<your-jwt-token>\"\n"
-                "     export GEOIDENTI_BASE_URL=\"http://localhost:8000/v1\"  # if not using production\n"
+                "   Export a valid JWT before running:\n"
+                '     export GEOIDENTI_API_KEY="<your-jwt-token>"\n'
+                '     export GEOIDENTI_BASE_URL="http://localhost:8000/v1"  # if not using production\n'
             )
             sys.exit(1)
 
@@ -118,21 +119,31 @@ class GeoIdentiDemo:
 
     def section_search(self):
         self.print_header("Section 5 — Search by Identity")
-        results = self.client.search(identity_name="Alex Rivera", limit=5)
+        response = self.client.search(identity_name="Alex Rivera", limit=5)
+        results = response.get("items", [])
         print(f"✅ {len(results)} result(s) for identity_name='Alex Rivera'\n")
+        print(
+            "   applied_face_weight="
+            f"{response.get('applied_face_weight')} "
+            f"weight_source={response.get('weight_source')}"
+        )
         if results:
-            header = f"  {'identity_name':<22} {'city':<16} {'confidence':<10} image_url"
+            header = (
+                f"  {'identity_name':<22} {'city':<16} {'confidence':<10} image_url"
+            )
             print(header)
             print(f"  {'-'*22} {'-'*16} {'-'*10} {'-'*40}")
             for r in results:
                 print(
                     f"  {r.get('identity_name',''):<22} "
                     f"{r.get('city',''):<16} "
-                    f"{str(r.get('confidence','')):<10} "
+                    f"{str(r.get('match_confidence','')):<10} "
                     f"{r.get('image_url','')}"
                 )
         else:
-            print("   ℹ️  No results returned. The engine may need a moment to index the")
+            print(
+                "   ℹ️  No results returned. The engine may need a moment to index the"
+            )
             print("   labeled vector. Re-run this section after a few seconds.")
 
     def section_hybrid_search(self):
@@ -142,23 +153,35 @@ class GeoIdentiDemo:
             return
         face_vector = self.analyze_results[0].get("face_vector")
         if not face_vector:
-            print("⚠️  First analyze result has no face_vector — skipping hybrid search.")
+            print(
+                "⚠️  First analyze result has no face_vector — skipping hybrid search."
+            )
             return
-        results = self.client.search_vector(
+        response = self.client.search_vector(
             face_vector=face_vector,
             semantic_query="outdoor portrait",
             limit=5,
         )
-        print(f"✅ {len(results)} result(s) — face vector × semantic_query='outdoor portrait'\n")
+        results = response.get("items", [])
+        print(
+            f"✅ {len(results)} result(s) — face vector × semantic_query='outdoor portrait'\n"
+        )
+        print(
+            "   applied_face_weight="
+            f"{response.get('applied_face_weight')} "
+            f"weight_source={response.get('weight_source')}"
+        )
         if results:
-            header = f"  {'identity_name':<22} {'city':<16} {'confidence':<10} image_url"
+            header = (
+                f"  {'identity_name':<22} {'city':<16} {'confidence':<10} image_url"
+            )
             print(header)
             print(f"  {'-'*22} {'-'*16} {'-'*10} {'-'*40}")
             for r in results:
                 print(
                     f"  {r.get('identity_name',''):<22} "
                     f"{r.get('city',''):<16} "
-                    f"{str(r.get('confidence','')):<10} "
+                    f"{str(r.get('match_confidence','')):<10} "
                     f"{r.get('image_url','')}"
                 )
 
@@ -169,7 +192,7 @@ class GeoIdentiDemo:
     def run(self):
         print("🚀 GeoIdenti SDK — Quick Demo")
         print("=" * 60)
-        print("Analyst-level walkthrough:")
+        print("Core walkthrough:")
         print("  1. Health check    4. Label identity")
         print("  2. API status      5. Search by name")
         print("  3. Analyze images  6. Hybrid search")
